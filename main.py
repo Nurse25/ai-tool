@@ -12,6 +12,7 @@ def main():
         base_url="https://openrouter.ai/api/v1",
         api_key=api_key,
     )
+    #Asks the model for a response
     response = client.chat.completions.create(
         model="openrouter/free",
         messages=[
@@ -21,6 +22,9 @@ def main():
             }
         ],
     )
+    if response.usage is None:
+        raise RuntimeError("No response received")
+    print(f"Prompt tokens: {response.usage.prompt_tokens}\nResponse tokens: {response.usage.completion_tokens}")
     print(response.choices[0].message.content)
 
 
