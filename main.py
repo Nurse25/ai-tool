@@ -1,10 +1,12 @@
 import os
 import json
+import sys
 from dotenv import load_dotenv
 from openai import OpenAI
+from config import MAX_ITERS
 import argparse
 from prompts import system_prompt
-from call_function import available_functions
+from call_function import available_functions, call_function
 
 
 def main():
@@ -28,23 +30,41 @@ def main():
         {"role": "user", "content": args.user_prompt},
     ]
 
-    #Asks the model for a response
-    response = client.chat.completions.create(
-        model="openrouter/free",
-        messages=messages,
-        tools=available_functions,
-    )
-    if response.usage is None:
-        raise RuntimeError("No response received")
-    #Handles the response
-    message = response.choices[0].message
-    if message.tool_calls:
-        for tool_call in message.tool_calls:
-            function_args = json.loads(tool_call.function.arguments or "{}")
-            print(f"Calling function: {tool_call.function.name}({function_args})")
-    else:
-        print(message.content)
+    for _ in range(MAX_ITERS):
+        final_response = generate_content(client, messages, args)
+        if final_response:
+            print("Final response:")
+            print(final_response)
+            return(final_response)
+        
+    print(f"Maximum iterations ({MAX_ITERS}) reached")
+    sys.exit(1)
+
+
    
+def generate_content(client: OpenAI, messages: list, args: bool) -> str | None:
+    
+        #Asks the model for a response
+        response = client.chat.completions.create(
+            model="openrouter/free",
+            messages=messages,
+            tools=available_functions,
+        )
+        if response.usage is None:
+            raise RuntimeError("No response received")
+        #Handles the response
+        message = response.choices[0].message
+        messages.append(message)
+        if message.tool_calls:
+            for tool_call in message.tool_calls:
+                tool_message = call_function(tool_call,args.verbose)
+                if not tool_message["content"]:
+                    raise Exception("tool content was empty")
+                if args.verbose is True:
+                    print(f"-> {tool_message['content']}")
+                messages.append(tool_message)
+        else:
+            return(message.content)
 
 
 if __name__ == "__main__":
